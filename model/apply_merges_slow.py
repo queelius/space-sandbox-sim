@@ -1,12 +1,11 @@
-from typing import Optional
-from bh import BarnesHut
-from body import Body
-from body_list import BodyList
-from forces import merge_bodies
+from model.bh import BarnesHut
+from model.body import Body
+from model.body_list import BodyList
+from model.forces import merge_bodies
 
 def apply_merges_slow(bh: BarnesHut,
                       bodies: BodyList,
-                      sel_body,
+                      sel_body: Body,
                       max_iter=1):
     
     while max_iter > 0:

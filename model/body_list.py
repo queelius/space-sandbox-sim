@@ -1,4 +1,4 @@
-from body import Body
+from model.body import Body
 
 class BodyList:
     def __init__(self, max_bodies: int):

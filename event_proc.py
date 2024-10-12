@@ -4,12 +4,12 @@ import pygame
 import random
 import math
 import const
-from body import Body
+from model.body import Body
 from space_gui import SpaceSandboxGUI
 from pygame.math import Vector2 as vec2
-from body_list import BodyList
-import utils
-from bh import BarnesHut
+from model.body_list import BodyList
+import utils.utils as utils
+from model.bh import BarnesHut
 
 class EventProc:
     def __init__(self, gui: SpaceSandboxGUI, manager: UIManager, bodies: BodyList, barnes_hut: BarnesHut):
@@ -66,14 +66,17 @@ class EventProc:
                                     rel_mass = min(1e-6, random.gauss(self.auto_new_rel_body_mass_mu,
                                                                       self.auto_new_rel_body_mass_var))
                                     new_mass = rel_mass * self.sel_body.mass                                    
-                                    new_body = utils.add_orbital_body(self.bodies, self.sel_body, xy, new_mass)
+                                    new_body = utils.add_orbital_body(bodies=self.bodies,
+                                                                      other_body=self.sel_body,
+                                                                      pos=xy,
+                                                                      mass=new_mass)
                                     print(f"[new orbital body {new_body}] around {self.sel_body} at a distance {(new_body.pos - self.sel_body.pos).length()}]")
                         
                         else:
                             found_body = False
-                            for obj in self.bodies:
-                                if (obj.pos - xy).length() < obj.radius:
-                                    self.sel_body = obj
+                            for body in self.bodies:
+                                if (body.pos - xy).length_squared() < body.radius ** 2:
+                                    self.sel_body = body
                                     self.follow_sel = True
                                     found_body = True
                                     break
@@ -85,10 +88,10 @@ class EventProc:
                                 # let ref mass be largest body mass in the system
                                 ref_mass = max([body.mass for body in self.bodies], default=1)
                                 new_mass = rel_mass * ref_mass
-                                new_obj = Body(xy, new_mass, random.choice(const.COLORS))
-                                new_obj.velocity = utils.weighted_velocity(self.bodies)
-                                self.bodies.add(new_obj)
-                                print(f"[new body: {new_obj}]")
+                                new_body = Body(xy, new_mass, random.choice(const.COLORS))
+                                new_body.velocity = utils.weighted_velocity(self.bodies)
+                                self.bodies.add(new_body)
+                                print(f"[new body: {new_body}]")
 
                 elif event.button == 3: # Right click to create new body
                     if self.manager.get_focus_set() is None:
@@ -99,7 +102,7 @@ class EventProc:
                         
                         found_body = False
                         for body in self.bodies:
-                            if (body.pos - xy).length() < body.radius:
+                            if (body.pos - xy).length_squared() < body.radius ** 2:
                                 found_body = True
                                 break
 
@@ -216,19 +219,19 @@ class EventProc:
                     rel_mass_var = input("Enter relative mass variance (default: 0.001): ")
                     rel_mass_var = float(rel_mass_var) if rel_mass_var else 0.001
 
-                    # print("Adding orbital bodies:")
-                    # print("----------------")
-                    # print(f"Number of bodies: {num_bodies}")
-                    # print(f"Mean distance from body: {dist_mu}")
-                    # print(f"Distance variance: {dist_var}")
-                    # print(f"Mean relative mass: {rel_mass_mu}")
-                    # print(f"Relative mass variance: {rel_mass_var}")
-                    # print("----------------")
+                    print("Adding orbital bodies:")
+                    print("----------------")
+                    print(f"Number of bodies: {num_bodies}")
+                    print(f"Mean distance from body: {dist_mu}")
+                    print(f"Distance variance: {dist_var}")
+                    print(f"Mean relative mass: {rel_mass_mu}")
+                    print(f"Relative mass variance: {rel_mass_var}")
+                    print("----------------")
 
                     utils.add_orbital_bodies(
                         bodies=self.bodies,
                         num_bodies=num_bodies,
-                        center_body=self.sel_body,
+                        other_body=self.sel_body,
                         dist_mu=dist_mu,
                         dist_var=dist_var,
                         rel_mass_mu=rel_mass_mu,

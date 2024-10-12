@@ -1,4 +1,4 @@
-from body import Body
+from model.body import Body
 import pygame
 import pygame_gui
 import math

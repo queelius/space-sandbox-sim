@@ -1,8 +1,7 @@
-from body import Body
-from body_list import BodyList
+from model.body import Body
+from model.body_list import BodyList
 import networkx as nx
 from pygame.math import Vector2 as vec2
-import math
 
 class Springs:
     """

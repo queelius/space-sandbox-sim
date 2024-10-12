@@ -2,8 +2,8 @@ import math
 from pygame.math import Vector2 as vec2
 import random
 import const
-from body import Body
-from body_list import BodyList
+from model.body import Body
+from model.body_list import BodyList
 
 def overlap_circle(r1, r2, d) -> bool:
     """
@@ -83,8 +83,12 @@ def add_orbital_bodies(
     """
     for _ in range(num_bodies):
         dist = random.gauss(dist_mu, dist_var)
+        if dist <= 0:
+            dist = 1e-6
         rel_mass = random.gauss(rel_mass_mu, rel_mass_var)
         mass = rel_mass * other_body.mass
+        if mass <= 0:
+            mass = 1e-6
         angle = random.uniform(0, 2 * math.pi)
         pos = vec2(other_body.pos[0] + dist * math.cos(angle),
                    other_body.pos[1] + dist * math.sin(angle))

@@ -1,6 +1,6 @@
-from body import Body
+from model.body import Body
 from pygame.math import Vector2 as vec2
-from utils import *
+from utils.utils import *
 import const
 from typing import Optional
 

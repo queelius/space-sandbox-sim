@@ -1,7 +1,7 @@
 import math
-from body import Body
+from model.body import Body
 from pygame.math import Vector2 as vec2
-import utils
+import utils.utils as utils
 
 class CompositeBody:
     """

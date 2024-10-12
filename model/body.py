@@ -1,5 +1,4 @@
 import const
-import pygame
 from pygame.math import Vector2 as vec2
 import math
 from typing import Tuple

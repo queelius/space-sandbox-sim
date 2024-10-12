@@ -1,14 +1,7 @@
 from pygame.math import Vector2 as vec2
-from body import Body
-from pygame.draw import circle
-from pygame.draw import rect
-from body import Body
-from typing import List
-from body_list import BodyList
-from typing import Optional
-from utils import distance as dist
-from typing import Tuple
-from typing import Callable
+from model.body import Body
+from typing import List, Tuple, Callable, Optional
+from model.body_list import BodyList
 
 class Node:
     """
@@ -175,7 +168,7 @@ class BarnesHut:
         if node.is_leaf() and node.body is body:
             return vec2(0, 0)
         
-        d = dist(node.mass_center, body.pos)
+        d = (node.mass_center - body.pos).length()
         # Use center of mass approximation if node is far enough
         if node.is_leaf() or node.width / d < self.theta:
             return force_model(body, node)
@@ -218,39 +211,13 @@ class BarnesHut:
             region_center /= len(bodies)
 
         if region_width is None:
-            max_distance = max(dist(body.pos, region_center) for body in bodies)
+            max_distance = max((body.pos - region_center).length() for body in bodies)
             region_width = 2 * max_distance
 
         self.root = Node(region_center, region_width)
         for body in bodies:
             self._insert_body(self.root, body)
 
-    def draw_quads(self, screen, node: Node, zoom, pan_x, pan_y):
-        """
-        Draw the quadtree nodes on the screen for visualization.
-
-        Parameters:
-        -----------
-        screen : pygame.Surface
-            The screen to draw on.
-        node : Node
-            The current node to draw.
-        zoom : float
-            The zoom level of the screen.
-        pan_x : float
-            The x-panning offset.
-        pan_y : float
-            The y-panning offset.
-        """
-        if node.is_leaf():
-            draw_pos = (node.center + vec2(pan_x, pan_y)) * zoom
-            draw_width = node.width * zoom
-            rect(screen, (255, 255, 255), (draw_pos.x - draw_width / 2,
-                                                       draw_pos.y - draw_width / 2,
-                                                       draw_width, draw_width), 1)
-        else:
-            for child in node.children:
-                self.draw_quads(screen, child, zoom, pan_x, pan_y)
 
     def query(self, pos: vec2) -> Optional[Node]:
         """
