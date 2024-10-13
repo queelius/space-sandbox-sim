@@ -1,6 +1,9 @@
 # controller/controller.py
 import pygame
 from pygame.math import Vector2
+from model.body import Body
+import random
+import utils.utils as utils
 
 class Controller:
     def __init__(self, model, view):
@@ -24,11 +27,10 @@ class Controller:
             # Add more event types as needed
         }
 
-    def handle_events(self):
-        for event in pygame.event.get():
-            handler = self.event_handlers.get(event.type, None)
-            if handler:
-                handler(event)
+    def handle_event(self, event):
+        handler = self.event_handlers.get(event.type, None)
+        if handler:
+            handler(event)
             # Else, ignore the event or handle it in a default way
 
     # Event handler methods
@@ -65,7 +67,7 @@ class Controller:
 
         # Check if a body was clicked
         for body in self.model:
-            if (body.position - world_pos).length_squared() <= body.radius ** 2:
+            if (body.pos - world_pos).length_squared() <= body.radius ** 2:
                 self.selected_body = body
                 self.follow_selected = True
                 print(f"Selected body: {body}")
@@ -87,45 +89,31 @@ class Controller:
         self.view.pan(delta)
         self.last_mouse_pos = current_mouse_pos
 
-    def create_new_body(self, position):
-        # Implement logic to create a new body at the given position
+    def create_new_body(self, pos):
+        # Implement logic to create a new body at the given pos
         # For simplicity, we'll create a body with default parameters
-        from model.body import Body
-        import random
         new_body = Body(
-            position=position,
-            mass=1e10,
-            color=(random.randint(0,255), random.randint(0,255), random.randint(0,255))
+            pos=pos,
+            mass=5e2,
+            base_color=(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         )
         self.model.add(new_body)
-        print(f"Created new body at {position}")
+        print(f"Created new body at {pos}")
 
     def add_orbital_body(self):
         if self.selected_body is None:
             print("No body selected to orbit around.")
             return
-
-        # For simplicity, we'll create a body at a fixed distance
-        from model.body import Body
-        import random
-        orbit_distance = self.selected_body.radius * 5
+        
+        orbit_distance = self.selected_body.radius * 1.1
         angle = random.uniform(0, 2 * 3.1415926)
-        position = self.selected_body.position + Vector2(orbit_distance, 0).rotate_rad(angle)
+        pos = self.selected_body.pos + Vector2(orbit_distance, 0).rotate_rad(angle)
 
-        # Calculate orbital velocity
-        G = 6.67430e-11  # Gravitational constant
-        mass = self.selected_body.mass * 0.01  # 1% of the selected body's mass
-        orbital_speed = (G * self.selected_body.mass / orbit_distance) ** 0.5
-        velocity_direction = (position - self.selected_body.position).rotate(90).normalize()
-        velocity = velocity_direction * orbital_speed
-
-        new_body = Body(
-            position=position,
-            mass=mass,
-            color=(random.randint(0,255), random.randint(0,255), random.randint(0,255))
-        )
-        new_body.velocity = self.selected_body.velocity + velocity
-        self.model.add(new_body)
+        utils.add_orbital_body(bodies=self.model,
+                               other_body=self.selected_body,
+                               pos=pos,
+                               mass=5e2,
+                               eccentricity=0)
         print(f"Added orbital body around {self.selected_body}")
 
     def is_running(self):

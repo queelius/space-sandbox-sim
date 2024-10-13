@@ -1,7 +1,7 @@
 import pygame
 from pygame.math import Vector2 as vec2
 from model.body import Body
-import const
+import utils.const as const
 
 class Renderer:
     def __init__(self, screen, width, height, bodies=None):
@@ -16,9 +16,8 @@ class Renderer:
 
     def render(self):
         self.screen.fill(self.background_color)
-        for body in self.bodies:
-            self.draw(body)
-        pygame.display.flip()
+        #for body in self.bodies:
+        #    self.draw(body)
 
     def draw(self, body):
         # Apply zoom and pan transformations

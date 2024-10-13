@@ -1,7 +1,7 @@
 import math
 from pygame.math import Vector2 as vec2
 import random
-import const
+import utils.const as const
 from model.body import Body
 from model.body_list import BodyList
 
@@ -114,10 +114,10 @@ def add_orbital_body(
         eccentricity = 1-1e-6
     semi_major_axis = dist / (1 - eccentricity)
     speed = math.sqrt(const.GRAVITY * other_body.mass * (2 / dist - 1 / semi_major_axis))
-    vx = other_body.velocity[0] - speed * math.sin(angle)
-    vy = other_body.velocity[1] + speed * math.cos(angle)
+    vx = other_body.vel[0] - speed * math.sin(angle)
+    vy = other_body.vel[1] + speed * math.cos(angle)
     body = Body(pos=pos, mass=mass, base_color=random.choice(const.COLORS), radius=radius)
-    body.velocity = vec2(vx, vy)
+    body.vel = vec2(vx, vy)
     bodies.add(body)
     return body
 
@@ -129,30 +129,34 @@ def weighted_velocity(bodies: BodyList) -> vec2:
     weighted_vel = vec2(0, 0)
 
     for body in bodies:
-        weighted_vel += body.velocity * body.mass / total_mass
+        weighted_vel += body.vel * body.mass / total_mass
 
     return weighted_vel
 
+def cross(o, a, b):
+    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)    
 
-def convex_hull(bodies: list[Body]) -> list[vec2]:
+def convex_hull(points: list[vec2]) -> list[vec2]:
     """
     Calculate the convex hull of a cluster of bodies.
     """
-    points = [body.pos for body in bodies]
-    hull = []
-    if len(points) < 3:
+    points = sorted(points, key=lambda p: (p.x, p.y))
+    if len(points) <= 1:
         return points
 
-    # Find the leftmost point
-    l = min(points, key=lambda p: p[0])
+    # Lower hull
+    lower = []
+    for p in points:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
 
-    # Sort the points based on the angle they make with the leftmost point
-    points.sort(key=lambda p: math.atan2(p[1] - l[1], p[0] - l[0]))
+    # Upper hull
+    upper = []
+    for p in reversed(points):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
 
-    hull = [points[0], points[1]]
-    for i in range(2, len(points)):
-        while len(hull) > 1 and (points[i] - hull[-1]).cross(hull[-1] - hull[-2]) <= 0:
-            hull.pop()
-        hull.append(points[i])
-
-    return hull
+    # Remove the last point of each half because it's repeated at the beginning of the other half
+    return lower[:-1] + upper[:-1]    

@@ -1,7 +1,11 @@
 from model.body import Body
 from model.body_list import BodyList
 import networkx as nx
-from pygame.math import Vector2 as vec2
+import utils.const as const
+import assets.audio as audio
+from typing import Callable
+from model.composite_body import CompositeBody
+
 
 class Springs:
     """
@@ -22,39 +26,64 @@ class Springs:
         self.springs = springs
         self.bodies = bodies
 
-    def link(self, body1: Body, body2: Body, k: float, damping: float, equilibrium: float, break_force: float):
-        self.springs.append((body1, body2, k, damping, equilibrium, break_force))
+    def link(self,
+             body1: Body,
+             body2: Body,
+             stiffness: float = const.SPRING_STIFFNESS,
+             damping: float = const.DAMPING,
+             equilibrium: float = None,
+             break_force: float = const.SPRING_BREAK_FORCE):
+        """
+        Link two bodies with a spring.
+
+        If equilibrium is None, it is set to the distance between the two bodies.
+        """
+        if equilibrium is None:
+            equilibrium = (body2.pos - body1.pos).length()
+
+        self.springs.append((body1, body2, stiffness, damping, equilibrium, break_force))
 
     def unlink(self, body1: Body, body2: Body):
         for spring in self.springs:
             if spring[0] is body1 and spring[1] is body2:
                 self.springs.remove(spring)
 
-    def find_clusters(self):
+    def __iter__(self):
+        return iter(self.springs)
+
+    def find_composite_bodies(self,
+                              pred: Callable[[tuple[Body, Body, float, float, float, float]], bool] = lambda x: True) -> list[CompositeBody]:
         """
-        Find clusters of spring-connected bodies.
+        Find spring-connected bodies that satisfy a spring predicate.
+
+        A predicate is a function that takes a Spring tuple:
+
+            [body1, body2, k, damping, equilibrium, break_force]
+
+        and return True if the spring satisfies the criteria of considering
+        the two bodies a (part of) the composite body.
         """
         # treat springs as undirected edges in a graph
-
         G = nx.Graph()
         # [body1, body2, k, damping, equilibrium, break_force]
-        for body1, body2, _, _, _, _ in self.springs:
-            G.add_edge(body1, body2)
+        for spring in self.springs:
+            if pred(spring):
+                G.add_edge(spring[0], spring[1], spring=spring)
 
-        comps = nx.connected_components(G)
-
-
-    def compute_force(self, spring: tuple[Body, Body, float, float, float, float]) -> vec2:
-        """
-        Helper function to compute the force between two bodies connected by a spring.
-        """
-
-        body1, body2, k, damping, equilibrium, _ = spring
-        d = body2.pos - body1.pos
-        l = d.length()
-        f = k * (l - equilibrium) * d.normalize()
-        f -= damping * (body1.velocity - body2.velocity)
-        return f
+        # find connected components
+        comps = list(nx.connected_components(G))
+        composites = []
+        for comp in comps:
+            if len(comp) > 1:
+                composites.append(CompositeBody(list(comp)))
+                
+        return composites
+    
+    def connected(self, body1: Body, body2: Body) -> bool:
+        for s in self.springs:
+            if body1 is s[0] and body2 is s[1]:
+                return True
+        return False
 
     def update(self):
         remove_list = []
@@ -64,15 +93,19 @@ class Springs:
                 remove_list.append(s)
                 continue
 
-            body1, body2, stiffness, damping, equilibrium, break_force = s
-            d = body2.pos - body1.pos
+            b1, b2, stiff, damp, equi, break_force = s
+            d = b2.pos - b1.pos
             l = d.length()
-            f = stiffness * (l - equilibrium) * d.normalize()
-            f -= damping * (body1.velocity - body2.velocity)
-            if l > break_force:
-                remove_list.append((body1, body2))
-            body1.add_force(f)
-            body2.add_force(-f)
+            if l < 1e-2:
+                continue
+            f = stiff * (l - equi) * d.normalize()
+            f -= damp * (b1.vel - b2.vel)
+            if f.length() > break_force:
+                audio.play(audio.generate_snap_sound())
+                remove_list.append(s)
+            else:
+                b1.add_force(f)
+                b2.add_force(-f)
 
         for s in remove_list:
             self.springs.remove(s)

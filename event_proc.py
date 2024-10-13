@@ -3,7 +3,7 @@ import pygame_gui
 import pygame
 import random
 import math
-import const
+import utils.const as const
 from model.body import Body
 from space_gui import SpaceSandboxGUI
 from pygame.math import Vector2 as vec2
@@ -89,7 +89,7 @@ class EventProc:
                                 ref_mass = max([body.mass for body in self.bodies], default=1)
                                 new_mass = rel_mass * ref_mass
                                 new_body = Body(xy, new_mass, random.choice(const.COLORS))
-                                new_body.velocity = utils.weighted_velocity(self.bodies)
+                                new_body.vel = utils.weighted_velocity(self.bodies)
                                 self.bodies.add(new_body)
                                 print(f"[new body: {new_body}]")
 
@@ -142,7 +142,7 @@ class EventProc:
                                 new_vel = vec2(*map(float, new_vel.split()))
                             else:
                                 new_vel = utils.weighted_velocity(self.bodies)
-                            new_obj.velocity = new_vel
+                            new_obj.vel = new_vel
                             self.bodies.add(new_obj)                   
                             print(f"[new body: {new_obj}]")
                 elif event.button == 2:  # Middle mouse button to start panning

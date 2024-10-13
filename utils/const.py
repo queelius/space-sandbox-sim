@@ -41,8 +41,11 @@ GRAVITY = REAL_GRAVITY * 1e8  # Gravitational constant
 REAL_LIGHT_SPEED = 299792458  # m/s
 LIGHT_SPEED = math.sqrt(REAL_LIGHT_SPEED) * 1e-3  # Speed of light
 
-REPULSION_STRENGTH = 25.0 # Strength of the repulsive force for collisions
-DAMPING = 150.0
+REPULSION_STRENGTH = 10000.0 # Strength of the repulsive force for collisions
+DAMPING = 500.0
 MERGE_RATIO = 0.7
 
 MAX_BODIES : int = 10000
+SPRING_STIFFNESS = 100
+SPRING_DAMPING = 10
+SPRING_BREAK_FORCE = float('inf')

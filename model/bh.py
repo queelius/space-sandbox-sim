@@ -170,6 +170,11 @@ class BarnesHut:
         
         d = (node.mass_center - body.pos).length()
         # Use center of mass approximation if node is far enough
+        #print(f"d: {d}, node.width: {node.width}, theta: {self.theta}")
+
+        if d == 0:
+            return vec2(0, 0)
+
         if node.is_leaf() or node.width / d < self.theta:
             return force_model(body, node)
 
@@ -276,7 +281,7 @@ class BarnesHut:
     def _bodies_overlap(self, body1: Body, body2: Body) -> bool:
         delta_pos = body1.pos - body2.pos
         dist_val = delta_pos.length()
-        min_dist = body1.radius + body2.radius
+        min_dist = body1.radius + body2.radius + const.WIGGLE_ROOM
         return dist_val < min_dist
 
     def _regions_overlap(self, body: Body, node: Node) -> bool:

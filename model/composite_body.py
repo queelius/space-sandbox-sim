@@ -3,23 +3,32 @@ from model.body import Body
 from pygame.math import Vector2 as vec2
 import utils.utils as utils
 
+
 class CompositeBody:
     """
     A class to represent a set of bodies as a single composte body,
     although we do not typically apply forces to the composite body
     in the simulation -- but we can intervene and in the future we
     may have special forces that act on composite bodies as a whole.
+
+    Note that this is a transient simulation object. Each time step, we
+    reconstruct composite bodies from spring networks, so we do not need
+    to worry about the state of the composite body between time steps.
     """
     def __init__(self, bodies: list[Body]):
         self.bodies = bodies
 
+    @property
     def pos(self) -> Body:
         """
         Calculate the center of mass of the cluster.
         """
         total_mass = self.mass        
-        com = Body(pos=sum(body.pos * body.mass for body in self.bodies) / total_mass,
-                   mass=total_mass)
+        # compute the center of mass
+        com = vec2(0, 0)
+        for body in self.bodies:
+            com += body.pos * body.mass
+        com /= total_mass
         return com
     
     @property
@@ -30,11 +39,11 @@ class CompositeBody:
         return sum(body.mass for body in self.bodies)
 
     @property    
-    def velocity(self) -> vec2:
+    def vel(self) -> vec2:
         """
         Calculate the average velocity of the cluster.
         """
-        return sum(body.velocity * body.mass for body in self.bodies) / self.mass
+        return sum(body.vel * body.mass for body in self.bodies) / self.mass
     
     @property
     def kinetic_energy(self) -> float:
@@ -54,8 +63,18 @@ class CompositeBody:
         cv = self.velocity
         E = 0
         for body in self.bodies:
-            E += body.mass * (body.velocity - cv).length_squared()
+            E += body.mass * (body.vel - cv).length_squared()
         return 0.5 * E
+    
+    @property
+    def radius(self) -> float:
+        """
+        Calculate the bounding radius of the cluster.
+        """
+        r = 0
+        for body in self.bodies:
+            r = max(r, (body.pos - self.pos).length())
+        return r
     
     @property
     def rotational_energy(self) -> float:
@@ -65,7 +84,7 @@ class CompositeBody:
         cv = self.velocity
         E = 0
         for body in self.bodies:
-            E += body.mass * (body.pos - self.pos).cross(body.velocity - cv)
+            E += body.mass * (body.pos - self.pos).cross(body.vel - cv)
         return 0.5 * E
     
     def add_thermal_energy(self, energy: float) -> None:
@@ -74,7 +93,7 @@ class CompositeBody:
         """
         cv = self.velocity
         for body in self.bodies:
-            body.velocity += (body.velocity - cv).normalize() * math.sqrt(2 * energy / body.mass)
+            body.vel += (body.vel - cv).normalize() * math.sqrt(2 * energy / body.mass)
 
     def add_rotational_energy(self, energy: float) -> None:
         """
@@ -82,7 +101,7 @@ class CompositeBody:
         """
         cv = self.velocity
         for body in self.bodies:
-            body.velocity += (body.pos - self.pos).cross(cv) * math.sqrt(2 * energy / body.mass)
+            body.vel += (body.pos - self.pos).cross(cv) * math.sqrt(2 * energy / body.mass)
 
     def add_force(self, force: vec2) -> None:
         """
@@ -102,10 +121,20 @@ class CompositeBody:
         """
         for body in self.bodies:
             r = body.pos - self.pos
-            body.add_force(r.cross(torque) * body.mass / self.mass)
+            tau = r.cross(torque) * body.mass / self.mass
+            print(tau)
+            body.add_force(1)
             
     def convex_hull(self):
         """
         Calculate the convex hull of the cluster.
         """
         return utils.convex_hull(self.bodies)
+    
+    def __iter__(self):
+        return iter(self.bodies)
+    
+    def __len__(self):
+        return len(self.bodies)
+    
+

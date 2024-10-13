@@ -2,6 +2,7 @@ from model.bh import BarnesHut
 from model.body import Body
 from model.body_list import BodyList
 from model.forces import merge_bodies
+import utils.const as const
 
 def apply_merges_slow(bh: BarnesHut,
                       bodies: BodyList,
@@ -33,5 +34,33 @@ def apply_merges_slow(bh: BarnesHut,
         bh.build_tree(bodies)
 
     return sel_body
+
+
+def spontaneous_spring_connect(bh: BarnesHut, springs):
+    """
+    Connect bodies with a spring if they are:
+
+        1. Within a certain distance of each other
+        2. Not already connected
+        3. Relative velocity is below some threshold
+    """
+
+    for body1, body2 in bh.overlapping_pairs:
+    
+        if springs.connected(body1, body2):
+            continue
+        
+        delta_pos = body2.pos - body1.pos
+        dist = delta_pos.length()
+        if dist > body1.radius + body2.radius + const.SPRING_DISTANCE_THRESHOLD:
+            continue
+
+        # is their relative velocity close to zero?
+        rel_vel = body2.vel - body1.vel
+        if rel_vel.length() > const.SPRING_RELATIVE_VELOCITY_THRESHOLD:
+            continue
+        
+        # Connect the bodies with a spring
+        springs.link(body1, body2, const.SPRING_STIFFNESS, const.SPRING_DAMPING, None, const.SPRING_BREAK_FORCE)
 
     
