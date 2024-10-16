@@ -159,4 +159,37 @@ def convex_hull(points: list[vec2]) -> list[vec2]:
         upper.append(p)
 
     # Remove the last point of each half because it's repeated at the beginning of the other half
-    return lower[:-1] + upper[:-1]    
+    return lower[:-1] + upper[:-1]
+
+
+
+def truncated_normal(
+        mu,
+        sigma,
+        lower = -float('inf'),
+        upper = float('inf')):
+    """
+    Generate a random number from a truncated normal distribution.
+
+    Parameters:
+    -----------
+    mu : float
+        The mean of the normal distribution.
+    sigma : float
+        The standard deviation of the normal distribution.
+    lower : float
+        The lower bound of the truncation. Default is negative infinity.
+    upper : float
+        The upper bound of the truncation. Default is positive infinity.
+
+    Returns:
+    --------
+    float
+        A random number from the truncated normal distribution.
+    """
+
+    while True:
+        x = random.gauss(mu, sigma)
+        if lower <= x <= upper:
+            return x
+        

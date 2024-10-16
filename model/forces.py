@@ -74,31 +74,3 @@ def repulsion_force(body1: Body, body2: Body) -> vec2:
     force_mag = const.REPULSION_STRENGTH * area ** 1.5
     return force_mag * delta_pos.normalize()
 
-def repulsion_forces(bh, body1: Body, body2: Body) -> vec2:
-    """
-    Compute repulsion forces for all overlapping body pairs.
-
-    Parameters:
-    -----------
-    bodies : BodyList
-        A list of body objects.
-    """
-    if bh.root is None:
-        raise ValueError("Quadtree has not been built yet. Call build_tree() first.")
-
-    overlapping_pairs = []
-    bh.find_overlapping_pairs(bh.root, overlapping_pairs)
-
-    # Compute repulsion forces for each overlapping pair
-    for body1, body2 in overlapping_pairs:
-        force = repulsion_force(body1, body2)
-        body1.force += force
-        body2.force -= force  # Newton's third law
-
-
-    
-
-    
-    
-
-

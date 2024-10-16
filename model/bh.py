@@ -281,7 +281,7 @@ class BarnesHut:
     def _bodies_overlap(self, body1: Body, body2: Body) -> bool:
         delta_pos = body1.pos - body2.pos
         dist_val = delta_pos.length()
-        min_dist = body1.radius + body2.radius + const.WIGGLE_ROOM
+        min_dist = body1.radius + body2.radius #+ const.WIGGLE_ROOM
         return dist_val < min_dist
 
     def _regions_overlap(self, body: Body, node: Node) -> bool:

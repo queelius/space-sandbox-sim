@@ -14,10 +14,26 @@ class Renderer:
         self.sel_body = None
         self.bodies = bodies
 
+    def viewport(self):
+        """
+        The viewport is into the simulation space. So, it is based
+        on the zoom and pan transformations.
+
+        Returns:
+        --------
+        viewport : tuple
+            The viewport in simulation space.
+        """
+        left = -self.pan_offset.x
+        right = (self.width - self.pan_offset.x) / self.zoom
+        top = -self.pan_offset.y
+        bottom = (self.height - self.pan_offset.y) / self.zoom
+        return (left, right, top, bottom)
+
     def render(self):
         self.screen.fill(self.background_color)
-        #for body in self.bodies:
-        #    self.draw(body)
+        for body in self.bodies:
+            self.draw(body)
 
     def draw(self, body):
         # Apply zoom and pan transformations

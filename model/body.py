@@ -11,12 +11,28 @@ class Body:
         """
         Initialize Body with a position vector and mass.
         """
-        self.pos : vec2 = vec2(pos)  # Position vector
-        self.old_pos : vec2 = vec2(pos)  # Previous position vector
+        self._pos : vec2 = vec2(pos)  # Position vector
+        self._old_pos : vec2 = vec2(pos)  # Previous position vector
         self.mass : float = mass
         self.radius : float = 0.25 * self.mass ** (1 / 3) if radius is None else radius
         self.force : vec2 = vec2(0, 0)
         self.base_color = base_color
+
+    @property
+    def pos(self) -> vec2:
+        """
+        Get the position of the body.
+        """
+        return self._pos
+    
+    @pos.setter
+    def pos(self, value: vec2) -> None:
+        """
+        Set the position of the body.
+        """
+        delta = self._pos - self._old_pos
+        self._pos = value
+        self._old_pos = value - delta
 
     @property
     def area(self) -> float:
@@ -81,23 +97,23 @@ class Body:
         """
         Calculate the velocity vector from position and old position.
         """
-        return (self.pos - self.old_pos) / const.DT
+        return (self._pos - self._old_pos) / const.DT
 
     @vel.setter
     def vel(self, value: vec2) -> None:
         """
         Set the velocity vector by adjusting the old position.
         """
-        self.old_pos = self.pos - value * const.DT
+        self._old_pos = self._pos - value * const.DT
     
     def reset_force(self) -> None:
         self.force = vec2(0, 0)
 
     def __str__(self) -> str:
-        return f"Body(x={self.pos.x:.3}, y={self.pos.y:.3}, mass={self.mass:.3}, radius={self.radius:.3})"
+        return f"Body(pos={self.pos:.3}, vel={self.vel:.3}, mass={self.mass:.3}, radius={self.radius:.3})"
     
     def __repr__(self) -> str:
-        return f"Body({self.pos.x}, {self.mass}, {self.color}, {self.radius})"
+        return f"Body({self.pos}, {self.mass}, {self.color}, {self.radius})"
     
     def add_force(self, force: vec2) -> None:
         """
@@ -113,9 +129,9 @@ class Body:
         Update the position based on current forces (Verlet integration, which
         is O(DT^2) accurate).
         """
-        tmp_pos = self.pos.copy()
-        self.pos += self.pos - self.old_pos + self.force / self.mass * const.DT**2
-        self.old_pos = tmp_pos
+        tmp_pos = self._pos.copy()
+        self._pos += self._pos - self._old_pos + self.force / self.mass * const.DT**2
+        self._old_pos = tmp_pos
 
     @property
     def kinetic_energy(self) -> float:
