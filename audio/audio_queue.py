@@ -20,8 +20,8 @@ class AudioQueue:
     """
 
     def __init__(self,
-                 get_viewport: Callable[[], Tuple[float, float, float, float]],
                  stereo: bool = True,
+                 min_vol: float = 0.1,
                  max_workers: int = 10):
         """
         Initialize the AudioQueue.
@@ -35,13 +35,17 @@ class AudioQueue:
         self.stereo = stereo
         self.queue: deque = deque()
         self.lock = threading.Lock()
-        self.get_viewport = get_viewport
+        self.min_vol = min_vol
         self.running = True
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.playback_thread = threading.Thread(target=self._playback_loop, daemon=True)
         self.playback_thread.start()
     
-    def add(self, sound_file: str, get_source_pos: Callable[[], vec2], delay: float = 0.0):
+    def add(self, sound_file: str,
+            get_source_pos: Callable[[], vec2],
+            get_listener_pos: Callable[[], vec2],
+            cutoff_distance: float,
+            delay: float = 0.0):
         """
         Add a sound to the queue.
         
@@ -52,7 +56,11 @@ class AudioQueue:
         """
         with self.lock:
             if self.running:
-                self.queue.append((sound_file, get_source_pos, delay))
+                self.queue.append((sound_file,
+                                   get_source_pos,
+                                   get_listener_pos,
+                                   cutoff_distance,
+                                   delay))
             else:
                 logging.info("AudioQueue is stopped. Cannot add new sounds.")
     
@@ -69,18 +77,30 @@ class AudioQueue:
                     self.queue.clear()
 
             if sounds_to_play:
-                for sound_file, get_source_pos, delay in sounds_to_play:
-                    self.executor.submit(self._play_sound, sound_file, get_source_pos, delay)
+                for wav, src_pos, listen_pos, cutoff_dist, delay in sounds_to_play:
+                    self.executor.submit(self._play_sound,
+                                         wav,
+                                         src_pos,
+                                         listen_pos,
+                                         cutoff_dist,
+                                         delay)
             else:
                 time.sleep(0.01)  # Sleep briefly to prevent busy waiting
 
-    def _play_sound(self, sound_file: str, get_source_pos: Callable[[], vec2], delay: float):
+    def _play_sound(self,
+                    sound_file: str,
+                    source_pos: Callable[[], vec2],
+                    listener_pos: Callable[[], vec2],
+                    dist_cutoff: float,
+                    delay: float):
         """
         Play a single sound with a potential delay and adjust volume and spatial effects based on listener position.
         
         Args:
             sound_file (str): The path to the sound file.
             get_source_pos (function): A function that returns the current position of the sound source.
+            get_listener_pos (function): A function that returns the current position of the listener.
+            dist_cutoff (float): The maximum distance at which the sound is audible.
             delay (float): Delay before playing the sound.
         """
         if delay > 0:
@@ -103,14 +123,16 @@ class AudioQueue:
                 if not self.running:
                     channel.stop()
                     break
-                source_pos = get_source_pos()
-                _, left_vol, right_vol = self._calculate_vol(source_pos)
+                _, left_vol, right_vol = self._calculate_vol(
+                    source_pos(),
+                    listener_pos(),
+                    dist_cutoff)
                 channel.set_volume(left_vol, right_vol)
                 time.sleep(0.01)
         except pygame.error as e:
             logging.error(f"Error playing sound: {e}")
 
-    def _calculate_vol(self, source_pos: vec2) -> Tuple[float, float, float]:
+    def _calculate_vol(self, source_pos: vec2, listener_pos: vec2, dist_cutoff: float) -> Tuple[float, float, float]:
         """
         Calculate the volume and stereo balance of the sound based on the viewport.
         The listener is assumed to be at the center of the viewport.
@@ -122,41 +144,53 @@ class AudioQueue:
             tuple: The overall volume level (between 0 and 1), left channel volume, and right channel volume.
         """
 
-        # Get viewport boundaries
-        viewport = self.get_viewport()
-        x_min, x_max, y_min, y_max = viewport
-
-        # Return zero volume if the source is outside the viewport
-        if not (x_min <= source_pos.x <= x_max and y_min <= source_pos.y <= y_max):
+        # Return zero volume if the distance between the source and the listener
+        # is beyond dist_cutoff
+        distance = (listener_pos - source_pos).length()
+        if distance > dist_cutoff:
             return 0.0, 0.0, 0.0
 
-        # Listener is at the center of the viewport
-        listener_pos = vec2((x_min + x_max) / 2, (y_min + y_max) / 2)
-
-        # Calculate maximum distance (from listener to viewport corner)
-        half_width = 0.5 * (x_max - x_min)
-        half_height = 0.5 * (y_max - y_min)
-        max_dist = math.hypot(half_width, half_height)
-
-        # Distance from source to listener
-        distance = (listener_pos - source_pos).length()
-
         # Calculate volume using inverse square law with a minimum volume threshold
-        min_vol = 0.1  # Minimum volume at max distance
-        vol = max(min_vol, 1 - (distance / max_dist) ** 2)
+        vol = self._volume(distance, dist_cutoff, self.min_vol)
 
         if not self.stereo:
             return vol, vol, vol
 
         # Calculate pan value (-1 for left, 1 for right)
         dx = source_pos.x - listener_pos.x
-        pan = self._project(dx, -half_width, half_width, -1, 1)
-
-        # Compute the angle for equal power panning
-        angle = (pan + 1) * (math.pi / 4)  # Maps pan from [-1,1] to [0, π/2]
+        pan = self._project(dx, -dist_cutoff, dist_cutoff, -1, 1)
+        vol, left_vol, right_vol = self._power_pan(vol, pan)
+        return vol, left_vol, right_vol
+    
+    @staticmethod
+    def _volume(distance, dist_cutoff, min_vol):
+        """
+        Calculate the volume based on the distance between the source and the listener.
+        
+        Args:
+            distance (float): The distance between the source and the listener.
+            dist_cutoff (float): The maximum distance at which the sound is audible.
+            min_vol (float): The minimum volume threshold.
+        
+        Returns:
+            float: The volume level between 0 and 1.
+        """
+        return max(min_vol, 1 - (distance / dist_cutoff) ** 2)
+    
+    @staticmethod
+    def _power_pan(vol: float, pan: float) -> Tuple[float, float]:
+        """
+        Compute the left and right channel volumes for equal power panning.
+        
+        Args:
+            pan (float): The pan value between -1 (left) and 1 (right).
+        
+        Returns:
+            tuple: The left and right channel volumes.
+        """
+        angle = (pan + 1) * (math.pi / 4)
         left_vol = vol * math.cos(angle)
         right_vol = vol * math.sin(angle)
-
         return vol, left_vol, right_vol
     
     @staticmethod
@@ -165,8 +199,7 @@ class AudioQueue:
         Project a value x from the range [x_min, x_max] to the range [z_min, z_max].
         """
         return z_min + (x - x_min) * (z_max - z_min) / (x_max - x_min)
-        
-    
+
     def stop(self):
         """
         Stop the playback thread, clear the queue, stop all playing sounds, and shutdown the thread pool.

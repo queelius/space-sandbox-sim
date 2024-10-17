@@ -1,10 +1,9 @@
 from model.body import Body
+import numpy as np
 
 class BodyList:
     def __init__(self, max_bodies: int):
-        self.bodies : list[Body] = [None] * max_bodies
-        self.num_bodies = 0
-        self.max_bodies = max_bodies
+        self.bodies : np.array = np.empty(0, dtype=Body)
 
     def __getitem__(self, index: int) -> Body:
         return self.bodies[index]
@@ -13,40 +12,33 @@ class BodyList:
         self.bodies[index] = value
 
     def add(self, value: Body) -> None:
-        #if self.num_bodies >= self.max_bodies:
-        #    raise ValueError("BodyList is full")
-        self.bodies[self.num_bodies] = value
-        self.num_bodies += 1
+        self.bodies = np.append(self.bodies, value)
+        
 
     def remove(self, index) -> None:
-        self.bodies[index] = self.bodies[self.num_bodies - 1]
-        self.num_bodies -= 1
+        self.bodies = np.delete(self.bodies, index)
+
+    @property
+    def num_bodies(self) -> int:
+        return len(self.bodies)
 
     def remove_item(self, item: Body) -> None:
-        index = self.bodies.index(item)
-        self.remove(index)
+        self.bodies = np.delete(self.bodies, np.where(self.bodies == item))
 
     def clear(self) -> None:
-        self.num_bodies = 0
+        self.bodies = np.empty(0, dtype=Body)
 
     def __iter__(self):
-        for i in range(self.num_bodies):
-            yield self.bodies[i]
+        return iter(self.bodies)
     
     def __len__(self) -> int:
-        return self.num_bodies
+        return len(self.bodies)
     
     def __contains__(self, item: Body) -> bool:
-        for i in range(self.num_bodies):
-            if self.bodies[i] == item:
-                return True
-        return False
+        return item in self.bodies
     
     def index(self, item: Body) -> int:
-        for i in range(self.num_bodies):
-            if self.bodies[i] is item:
-                return i
-        return 0
+        return np.where(self.bodies == item)[0][0]
     
     def __str__(self) -> str:
-        return f"BodyList(num_bodies={self.num_bodies})"
+        return f"BodyList(num_bodies={len(self.bodies)})"

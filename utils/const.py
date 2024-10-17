@@ -36,12 +36,12 @@ DT = 1.0 / FPS  # Time step
 
 # m^3 kg^-1 s^-2
 REAL_GRAVITY = 6.67430e-11
-GRAVITY = REAL_GRAVITY * 1e8  # Gravitational constant
+GRAVITY = REAL_GRAVITY * 1e10  # Gravitational constant
 
 REAL_LIGHT_SPEED = 299792458  # m/s
 LIGHT_SPEED = math.sqrt(REAL_LIGHT_SPEED) * 1e-3  # Speed of light
 
-REPULSION_STRENGTH = 10000.0 # Strength of the repulsive force for collisions
+REPULSION_STRENGTH = 1000.0 # Strength of the repulsive force for collisions
 DAMPING = 500.0
 MERGE_RATIO = 0.7
 

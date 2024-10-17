@@ -35,18 +35,18 @@ def main():
     barnes_hut : BarnesHut = BarnesHut(theta=0.5)
     audio_manager = AudioManager(event_bus, lambda: renderer.get_viewport())
 
-    #sun = fact.make_body_circle(
-    #    num_bodies=72,
-    #    center=vec2(const.WIDTH / 2, const.HEIGHT / 2),
-    #    radius=220.0,
-    #    mass=5e6)
+    sun = fact.make_body_circle(
+        layers=7,
+        slack=0.1,
+        center=vec2(const.WIDTH / 2 + 1400, const.HEIGHT / 2 + 100),
+        mass=1e7)
     
     earth = fact.make_body_circle(
-        num_bodies=28,
-        center=vec2(const.WIDTH / 2 + 200, const.HEIGHT / 2 + 200),
-        radius=32.0,
+        layers=5,
+        center=vec2(const.WIDTH / 2, const.HEIGHT / 2 + 100),
         mass=1e5,
-        vel=vec2(10, -10))
+        slack=1.0,
+        vel=vec2(100, -90))
     
     #sun = fact.make_circle(
     #    num_bodies=72,
@@ -57,36 +57,34 @@ def main():
     #    core_mass_prop=None)
 
     # is a circle at center pos=(0,0) with radius 250
-    def is_circle(pos: vec2) -> bool:
-        return pos.length() < 250
+    #def is_circle(pos: vec2) -> bool:
+    #    return pos.length() < 150
     
-    sun = fact.make_shape(
-        num_bodies=100,
-        low_mass=1e3,
-        high_mass=1e5,
-        max_width=500,
-        max_height=500,
-        shape_pred=is_circle,
-        max_tries=1000000)
+    #sun = fact.make_shape(
+    #    num_bodies=120,
+    #    low_mass=4e4,
+    #    high_mass=2e5,
+    #    max_width=300,
+    #    max_height=300,
+    #    shape_pred=is_circle,
+    #    max_tries=1000000)
     
-    for body in sun:
-        body.pos += vec2(const.WIDTH / 2 + 1000, const.HEIGHT / 2 + 1000)
-        #body.pos = body.pos + vec2(const.WIDTH / 2 + 1000, const.HEIGHT / 2 + 1000)
-        
-
+    #for body in sun:
+    #    #body.pos += vec2(const.WIDTH / 2 + 1000, const.HEIGHT / 2 + 1000)
+    #    body.pos = body.pos + vec2(const.WIDTH / 2 + 400, const.HEIGHT / 2 + 100)
     
-    #create_spring_mesh(springs=springs,
-    #                   composite=sun,
-    #                   stiffness=100000.0,
-    #                   damping=1000.0,
-    #                   break_force=10000000.0,
-    #                   k=7)
+    create_spring_mesh(springs=springs,
+                       composite=sun,
+                       stiffness=1000000.0,
+                       damping=1000.0,
+                       break_force=10000000.0,
+                       k=6)
 
     create_spring_mesh(springs=springs,
                        composite=earth,
-                       stiffness=5000.0,
-                       damping=1000.0,
-                       break_force=30000.0,
+                       stiffness=60000.0,
+                       damping=400.0,
+                       break_force=1000000.0,
                        k=5)
     
     mass = 0
@@ -142,7 +140,7 @@ def main():
                       zoom=renderer.zoom,
                       pan_offset=renderer.pan_offset)
 
-        draw_springs(springs, screen, renderer.zoom, renderer.pan_offset)
+        #draw_springs(springs, screen, renderer.zoom, renderer.pan_offset)
 
         pygame.display.update()
 

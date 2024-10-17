@@ -14,7 +14,7 @@ class Body:
         self._pos : vec2 = vec2(pos)  # Position vector
         self._old_pos : vec2 = vec2(pos)  # Previous position vector
         self.mass : float = mass
-        self.radius : float = 0.25 * self.mass ** (1 / 3) if radius is None else radius
+        self.radius : float = self.mass ** (1 / 3) if radius is None else radius
         self.force : vec2 = vec2(0, 0)
         self.base_color = base_color
 
@@ -110,7 +110,7 @@ class Body:
         self.force = vec2(0, 0)
 
     def __str__(self) -> str:
-        return f"Body(pos={self.pos:.3}, vel={self.vel:.3}, mass={self.mass:.3}, radius={self.radius:.3})"
+        return f"Body(pos={self.pos}, vel={self.vel}, mass={self.mass:.3}, radius={self.radius:.3})"
     
     def __repr__(self) -> str:
         return f"Body({self.pos}, {self.mass}, {self.color}, {self.radius})"

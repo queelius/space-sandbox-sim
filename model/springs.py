@@ -51,8 +51,9 @@ class Spring:
         
         d = body1.pos - body2.pos
         l = d.length()
-        #if l < 1e-3:
-        #    return None
+        if l < 1e-3:
+            d = d.normalize() * 1e-3
+            l = 1e-3
         f = stiff * (l - equi) * d.normalize()
         f -= damp * (body1.vel - body2.vel)
 
@@ -160,10 +161,12 @@ class Springs:
                 continue
             f = stiff * (l - equi) * d.normalize()
             f -= damp * (b1.vel - b2.vel)
+
             if f.length() > break_force:
                 self.event_bus.publish(
                     'spring_break',
-                    {'get_source_pos': lambda: (b1.pos + b2.pos) / 2})
+                    {'source_pos': lambda: (b1.pos + b2.pos) / 2,
+                     'delay': 0.0})
                 remove_list.append(s)
             else:
                 b1.add_force(f)
