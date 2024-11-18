@@ -6,6 +6,7 @@ def create_spring_mesh(springs : Springs,
                        composite: list[Body],
                        stiffness: float,
                        damping: float,
+                       break_distance_factor: float,
                        break_force: float,
                        k: int = 3) -> None:
     """
@@ -56,4 +57,5 @@ def create_spring_mesh(springs : Springs,
                          stiffness=stiffness,
                          damping=damping,
                          equilibrium=None,
+                         break_distance_factor=break_distance_factor,
                          break_force=break_force)

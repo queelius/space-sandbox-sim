@@ -2,6 +2,7 @@ import utils.const as const
 from pygame.math import Vector2 as vec2
 import math
 from typing import Tuple
+from model.sim_state import SimState
 
 class Body:
     def __init__(self, pos: vec2,
@@ -47,27 +48,13 @@ class Body:
         Adjust the radius based on the new area value.
         """
         self.radius = math.sqrt(value / math.pi)
-
-    @property
-    def event_horizon(self) -> float:
-        """
-        Calculate the event horizon of the body.
-        """
-        return 2 * const.GRAVITY * self.mass / const.LIGHT_SPEED**2
-    
-    @property
-    def relativistic_mass(self) -> float:
-        """
-        Calculate the relativistic mass of the body
-        """
-        return self.mass / math.sqrt(1 - self.vel.length_squared() / const.LIGHT_SPEED**2)
     
     @property
     def escape_velocity(self) -> float:
         """
         Calculate the escape velocity of the body.
         """
-        return math.sqrt(2 * const.GRAVITY * self.mass / self.radius)
+        return math.sqrt(2 * const.SIM_GRAVITY * self.mass / self.radius)
 
     @property
     def density(self) -> float:
@@ -81,14 +68,15 @@ class Body:
         """
         Adjust the mass based on the new density value.
         """
-        self.mass = value * self.area()
+        self.mass = value * self.area
 
     @property
     def color(self) -> Tuple[int, int, int]:
         """
         Get the color of the body.
-        
-        TODO: let color be a function of `base_color` and other properties.
+
+        TODO: We might modulate the `base_color` based on the density of the
+              body or something else.
         """
         return self.base_color
     
@@ -97,14 +85,14 @@ class Body:
         """
         Calculate the velocity vector from position and old position.
         """
-        return (self._pos - self._old_pos) / const.DT
+        return (self._pos - self._old_pos) / SimState().time_step
 
     @vel.setter
     def vel(self, value: vec2) -> None:
         """
         Set the velocity vector by adjusting the old position.
         """
-        self._old_pos = self._pos - value * const.DT
+        self._old_pos = self._pos - value * SimState().time_step
     
     def reset_force(self) -> None:
         self.force = vec2(0, 0)
@@ -119,18 +107,31 @@ class Body:
         """
         Accumulate forces.
 
-        Args:
-            force (vec2): The force vector to add.
+        Parameters:
+        -----------
+        force : vec2
+            The force to accumulate.
         """
         self.force += force
 
     def update(self) -> None:
         """
-        Update the position based on current forces (Verlet integration, which
-        is O(DT^2) accurate).
+        This implements the Verlet integration method:
+
+            x(t + dt) = 2 * x(t) - x(t - dt) + a * dt^2
+
+        Verlet integration is a numerical method used to integrate Newton's
+        equations of motion. It is a symplectic integrator, meaning that it
+        conserves energy (up to numerical errors). It is of second order O(dt^2),
+        which means that the error in the position is proportional to the square
+        of the time step, and the error in the velocity is proportional to the
+        time step.
         """
         tmp_pos = self._pos.copy()
-        self._pos += self._pos - self._old_pos + self.force / self.mass * const.DT**2
+        a = self.force / self.mass
+        dt = SimState().time_step
+
+        self._pos += self._pos - self._old_pos + a * dt ** 2
         self._old_pos = tmp_pos
 
     @property

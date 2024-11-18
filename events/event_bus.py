@@ -1,4 +1,4 @@
-# event_bus.py
+# events/event_bus.py
 from typing import Callable, Dict, List
 
 class EventBus:

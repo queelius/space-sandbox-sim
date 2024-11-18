@@ -30,22 +30,20 @@ COLORS = [
 
 HIGHLIGHT_COLOR = (192, 192, 192)  # Silver for highlighting selected body
 
-# 1 DT = 100 hours, so we scale all physical constants to make the simulation
-# work accurately with the chosen units
-DT = 1.0 / FPS  # Time step
+NEWTON_UNIV_GRAVITY = 6.67430e-11 # m^3 kg^-1 s^-2
+SIM_GRAVITY = NEWTON_UNIV_GRAVITY * 1e7
 
-# m^3 kg^-1 s^-2
-REAL_GRAVITY = 6.67430e-11
-GRAVITY = REAL_GRAVITY * 1e10  # Gravitational constant
+LIGHT_SPEED = 299792458  # 2.99792458e8 m/s
+SIM_LIGHT_SPEED = math.sqrt(LIGHT_SPEED) # 1.7315e4 m/s
 
-REAL_LIGHT_SPEED = 299792458  # m/s
-LIGHT_SPEED = math.sqrt(REAL_LIGHT_SPEED) * 1e-3  # Speed of light
+REPULSION_STRENGTH = 200.0 # Strength of the repulsive force for collisions
+REPULSION_DAMPING = 10.0
 
-REPULSION_STRENGTH = 1000.0 # Strength of the repulsive force for collisions
-DAMPING = 500.0
 MERGE_RATIO = 0.7
 
 MAX_BODIES : int = 10000
-SPRING_STIFFNESS = 100
-SPRING_DAMPING = 10
+SPRING_STIFFNESS = 10
+SPRING_DAMPING = 1
 SPRING_BREAK_FORCE = float('inf')
+SPRING_BREAK_DISTANCE_FACTOR = 3
+NEIGHBORHOOD_RADIUS = 5

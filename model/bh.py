@@ -206,7 +206,7 @@ class BarnesHut:
             The root node of the constructed quadtree.
         """
         self.clear()
-        if len(bodies) == 0:
+        if bodies is None or len(bodies) == 0:
             return
             
         if region_center is None:
@@ -278,22 +278,22 @@ class BarnesHut:
             force = self._calculate_force(body, self.root, force_model)
             body.force += force
 
-    def _bodies_overlap(self, body1: Body, body2: Body) -> bool:
+    def _bodies_near(self, body1: Body, body2: Body, near_threshold: float) -> bool:
         delta_pos = body1.pos - body2.pos
         dist_val = delta_pos.length()
-        min_dist = body1.radius + body2.radius #+ const.WIGGLE_ROOM
-        return dist_val < min_dist
+        near_dist = body1.radius + body2.radius + near_threshold
+        return dist_val < near_dist
 
-    def _regions_overlap(self, body: Body, node: Node) -> bool:
+    def _regions_overlap(self, body: Body, node: Node, near_threshold: float) -> bool:
         half_width = node.width / 2
         dx = abs(body.pos.x - node.center.x)
         dy = abs(body.pos.y - node.center.y)
-        return dx < (body.radius + half_width) and dy < (body.radius + half_width)
+        return dx < (body.radius + half_width + near_threshold) and dy < (body.radius + half_width + near_threshold)
 
-    def _check_overlap(self, node: Node, root: Node, checked: set) -> None:
+    def _check_near(self, node: Node, root: Node, checked: set, near_threshold: float) -> None:
         if root.is_leaf():
             if root.body is not None and root.body is not node.body:
-                if self._bodies_overlap(node.body, root.body):
+                if self._bodies_near(node.body, root.body, near_threshold):
                     # Create a unique identifier for the pair to avoid duplicates
                     pair_ids = tuple(sorted((id(node.body), id(root.body))))
                     if pair_ids not in checked:
@@ -301,26 +301,35 @@ class BarnesHut:
                         checked.add(pair_ids)
         else:
             for child in root.children:
-                if self._regions_overlap(node.body, child):
-                    self._check_overlap(node, child, checked)
+                if self._regions_overlap(node.body, child, near_threshold):
+                    self._check_near(node, child, checked, near_threshold)
 
-    def compute_overlapping_pairs(self) -> None:
+    def compute_neighborhood_pairs(self,
+                                   neighbor_threshold = 10.0) -> None:
         """
-        Compute all overlapping pairs of bodies in the quadtree.
+        Compute all nearby pairs of bodies in the quadtree.
+
+        Parameters:
+        -----------
+        neighbor_threshold : float
+            The distance threshold for considering two bodies as neighbors.
+            We compute their distance (if they overlap, they have 0 distance),
+            and if the distance is less than the threshold, we consider them
+            neighbors.
         """
-        #if self.root is None:
-        #    raise ValueError("Quadtree has not been built yet. Call build_tree() first.")
+        if self.root is None:
+            return
         
         checked = set()
-        self._compute_overlapping_pairs(self.root, checked)
+        self._compute_neighborhood_pairs(self.root, checked, neighbor_threshold)
 
-    def _compute_overlapping_pairs(self, node: Node, checked: set) -> None:
+    def _compute_neighborhood_pairs(self, node: Node, checked: set, near_threshold: float) -> None:
         if node.is_leaf():
             if node.body is not None:
-                self._check_overlap(node, self.root, checked)
+                self._check_near(node, self.root, checked, near_threshold)
         else:
             for child in node.children:
-                self._compute_overlapping_pairs(child, checked)
+                self._compute_neighborhood_pairs(child, checked, near_threshold)
 
     def compute_local_forces(self,
                              force_model: Callable[[Body, Body], vec2]) -> None:

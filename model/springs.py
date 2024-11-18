@@ -16,9 +16,14 @@ class Spring:
     STIFFNESS_IDX = 2
     DAMPING_IDX = 3
     EQUILIBRIUM_IDX = 4
-    BREAK_FORCE_IDX = 5
+    BREAK_DISTANCE_FACTOR_IDX = 5
+    BREAK_FORCE_IDX = 6    
 
-    MAX_SPRING_FORCE = 1e6
+    MAX_SPRING_FORCE = 1e9
+    DEFAULT_BREAK_DISTANCE_FACTOR = 1.5
+    DEFAULT_BREAK_FORCE = 1e7
+    DEFAULT_STIFFNESS = 1e6
+    DEFAULT_DAMPING = 1e2
     
     @staticmethod
     def body1(spring: spring_tuple) -> Body:
@@ -43,29 +48,11 @@ class Spring:
     @staticmethod
     def break_force(spring: spring_tuple) -> float:
         return spring[Spring.BREAK_FORCE_IDX]
-        
+    
     @staticmethod
-    def compute_force(spring: spring_tuple):
-
-        body1, body2, stiff, damp, equi, break_force = spring
+    def break_distance_factor(spring: spring_tuple) -> float:
+        return spring[Spring.BREAK_DISTANCE_FACTOR_IDX]
         
-        d = body1.pos - body2.pos
-        l = d.length()
-        if l < 1e-3:
-            d = d.normalize() * 1e-3
-            l = 1e-3
-        f = stiff * (l - equi) * d.normalize()
-        f -= damp * (body1.vel - body2.vel)
-
-        f_mag = f.length()
-        if f_mag > break_force:
-            return None
-        
-        if f_mag > Spring.MAX_SPRING_FORCE:
-            f = f.normalize() * Spring.MAX_SPRING_FORCE
-
-        return f
-
 class Springs:
     """
     A class to represent springs between bodies. This may be used
@@ -91,9 +78,10 @@ class Springs:
              body1: Body,
              body2: Body,
              stiffness: float = const.SPRING_STIFFNESS,
-             damping: float = const.DAMPING,
+             damping: float = const.SPRING_DAMPING,
              equilibrium: float = None,
-             break_force: float = const.SPRING_BREAK_FORCE):
+             break_distance_factor: float = const.SPRING_BREAK_DISTANCE_FACTOR,
+             break_force: float = const.SPRING_BREAK_FORCE) -> None:
         """
         Link two bodies with a spring.
 
@@ -101,11 +89,18 @@ class Springs:
         """
         if equilibrium is None:
             equilibrium = (body2.pos - body1.pos).length()
-
-        self.springs.append((body1, body2, stiffness, damping, equilibrium, break_force))
+        self.springs.append((body1, body2, stiffness, damping, equilibrium, break_distance_factor, break_force))
+        # self.event_bus.publish("spring_connected", { "body1": body1,
+        #                                             "body2": body2,
+        #                                             "stiffness": stiffness,
+        #                                             "damping": damping,
+        #                                             "equilibrium": equilibrium,
+        #                                             "break_distance_factor": break_distance_factor,
+        #                                             "break_force": break_force })
+        
 
     def unlink(self, body1: Body, body2: Body):
-        for spring in self.springs:
+        for body1, body2, spring in self.springs:
             if spring[0] is body1 and spring[1] is body2:
                 self.springs.remove(spring)
 
@@ -113,7 +108,7 @@ class Springs:
         return iter(self.springs)
 
     def find_composite_bodies(self,
-                              pred: Callable[[tuple[Body, Body, float, float, float, float]], bool] = lambda x: True) -> list[CompositeBody]:
+                              pred: Callable[[tuple[Body, Body, float, float, float, float, float]], bool] = lambda x: True) -> list[CompositeBody]:
         """
         Find spring-connected bodies that satisfy a spring predicate.
 
@@ -129,7 +124,9 @@ class Springs:
         # [body1, body2, k, damping, equilibrium, break_force]
         for spring in self.springs:
             if pred(spring):
-                G.add_edge(spring[0], spring[1], spring=spring)
+                G.add_edge(spring[Spring.BODY1_IDX],
+                           spring[Spring.BODY2_IDX],
+                           spring=spring)
 
         # find connected components
         comps = list(nx.connected_components(G))
@@ -141,8 +138,9 @@ class Springs:
         return composites
     
     def connected(self, body1: Body, body2: Body) -> bool:
-        for s in self.springs:
-            if body1 is s[0] and body2 is s[1]:
+        for b1, b2, _, _, _, _, _ in self.springs:
+            if ((body1 is b1 and body2 is b2 or
+                (body1 is b2 and body2 is b1))):
                 return True
         return False
 
@@ -150,27 +148,50 @@ class Springs:
         remove_list = []
         
         for s in self.springs:
-            if s[0] not in self.bodies or s[1] not in self.bodies:
+            b1, b2, stiff, damp, equi, break_distance_factor, break_force = s
+            if b1 not in self.bodies or b2 not in self.bodies:
+                remove_list.append(s)
+                continue            
+            d = b2.pos - b1.pos
+            l = d.length()
+            break_dist = break_distance_factor * equi
+            if l > break_dist:
+                # self.event_bus.publish(
+                #     'spring_break_distance',
+                #     {'source_pos': lambda: (b1.pos + b2.pos) / 2,
+                #      'body1': b1,
+                #      'body2': b2,
+                #      'distance': l,
+                #      'equilibrium': equi,
+                #      'break_distance': break_dist,
+                #      'delay': 0.0})
                 remove_list.append(s)
                 continue
 
-            b1, b2, stiff, damp, equi, break_force = s
-            d = b2.pos - b1.pos
-            l = d.length()
-            if l < 1e-2:
+            if l < 1e-3:
                 continue
+
             f = stiff * (l - equi) * d.normalize()
             f -= damp * (b1.vel - b2.vel)
 
-            if f.length() > break_force:
-                self.event_bus.publish(
-                    'spring_break',
-                    {'source_pos': lambda: (b1.pos + b2.pos) / 2,
-                     'delay': 0.0})
+            f_mag = f.length()
+            if f_mag > break_force:
+                # self.event_bus.publish(
+                #     'spring_break_force',
+                #     {'source_pos': lambda: (b1.pos + b2.pos) / 2,
+                #      'body1': b1,
+                #      'body2': b2,
+                #      'force_mag': f_mag,
+                #      'break_force': break_force,
+                #      'delay': 0.0})
                 remove_list.append(s)
-            else:
-                b1.add_force(f)
-                b2.add_force(-f)
+                continue
+
+            if f_mag > Spring.MAX_SPRING_FORCE:
+                f = f.normalize() * Spring.MAX_SPRING_FORCE
+
+            b1.add_force(f)
+            b2.add_force(-f)
 
         for s in remove_list:
             self.springs.remove(s)

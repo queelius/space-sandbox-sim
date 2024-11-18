@@ -1,15 +1,11 @@
 import math
+from scipy.stats import truncnorm
 from pygame.math import Vector2 as vec2
+from typing import Optional
 import random
 import utils.const as const
 from model.body import Body
 from model.body_list import BodyList
-
-def overlap_circle(r1, r2, d) -> bool:
-    """
-    Check if two circles with radii r1 and r2 overlap when separated by distance d.
-    """
-    return d < r1 + r2
 
 def distance(p1 : vec2, p2 : vec2) -> float:
     """
@@ -23,103 +19,144 @@ def distance2(p1 : vec2, p2 : vec2) -> float:
     """
     return (p1 - p2).length_squared()
 
-
-def overlap_chord(r1, r2, d) -> float:
-    """
-    Calculate the length of the chord formed by the intersection of two circles
-    with radii r1 and r2 and centers separated by distance d.
-    """
-    # If they do not overlap, return 0
-    if d >= r1 + r2:
-        return 0
-
-    # If one circle is inside the other, return 0
-    if d <= abs(r1 - r2):
-        return 0
-
-    # Calculate the length of the chord formed by the intersection
-    part = (d**2 + r1**2 - r2**2) / (2 * d)
-    return 2 * math.sqrt(r1**2 - part**2)
-
-def overlap_proj(r1, r2, d) -> float:
-    """
-    Calculate the projected overlap of two circles along the line connecting
-    their centers.
-    """
-    return max(0, r1 + r2 - d)
-
-def overlap_area(r1, r2, d) -> float:
-    """
-    Calculate the area of overlap between two circles with radii r1 and r2
-    separated by a distance d.
-    """
-    # If the circles do not overlap, return 0
-    if d >= r1 + r2:
-        return 0
-
-    # If one circle is completely inside the other, return the area of the smaller circle
-    if d <= abs(r1 - r2):
-        return math.pi * min(r1, r2) ** 2
-
-    # Calculate the area of the overlapping region
-    part1 = r1**2 * math.acos((d**2 + r1**2 - r2**2) / (2 * d * r1))
-    part2 = r2**2 * math.acos((d**2 + r2**2 - r1**2) / (2 * d * r2))
-    part3 = 0.5 * math.sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2))
-
-    return part1 + part2 - part3
-
-def add_orbital_bodies(
+def generate_orbital_bodies(
         num_bodies : int,
-        bodies : BodyList,
-        other_body : Body,
-        dist_mu: float,
-        dist_var: float,
-        rel_mass_mu: float,
-        rel_mass_var: float,
-        eccentricity : float = 0) -> None:
+        orbit_around : Body,
+        dist_truncnorm: tuple[float, float, float, float],
+        relative_mass_truncnorm: tuple[float, float, float, float],
+        radius_truncnorm: Optional[tuple[float, float, float, float]] = None,
+        density_truncnorm: Optional[tuple[float, float, float, float]] = None,
+        eccentricity_truncnorm: tuple[float, float, float, float] = (0, 1, 0, 0),
+        G: float = const.SIM_GRAVITY) -> list[Body]:
     """
-    Add a number of bodies in orbit around an `other_body`, ideally that is
-    relatively large so that the system is relatively stable.
-    """
-    for _ in range(num_bodies):
-        dist = random.gauss(dist_mu, dist_var)
-        if dist <= 0:
-            dist = 1e-6
-        rel_mass = random.gauss(rel_mass_mu, rel_mass_var)
-        mass = rel_mass * other_body.mass
-        if mass <= 0:
-            mass = 1e-6
-        angle = random.uniform(0, 2 * math.pi)
-        pos = vec2(other_body.pos[0] + dist * math.cos(angle),
-                   other_body.pos[1] + dist * math.sin(angle))
-        add_orbital_body(bodies=bodies,
-                         other_body=other_body,
-                         pos=pos,
-                         mass=mass,
-                         eccentricity=eccentricity)
+    Generate orbital bodies around an `orbit_around`. This assumes
+    that the relative mass of the new bodies is negligible compared
+    to the mass of the `orbit_around`, so that the new bodies will
+    not affect the orbit of the `orbit_around` significantly.
 
-def add_orbital_body(
-        bodies : BodyList,
-        other_body : Body,
-        pos : vec2,
-        mass: float,
+    Notes: This function has a complicated signature because it allows
+    for a lot of customization, but the default values are set to allow
+    for simple usage. Either `radius_truncnorm` or `density_truncnorm`
+    should be specified, but not both. If neither is specified, the
+    radius will be determined by the mass with some default density
+    assumption.
+
+    Parameters:
+    -----------
+    num_bodies : int
+        The number of bodies to generate.
+    orbit_around : Body
+        The body around which the new bodies will orbit.
+    dist_truncnorm : tuple[float, float, float, float]
+        The parameters for the truncated normal distribution of the
+        distance from the `orbit_around` body. The tuple should be
+        in the form (min, max, mu, sd).
+    relative_mass_truncnorm : tuple[float, float, float, float]
+        The parameters for the truncated normal distribution of the
+        relative mass of the new bodies. The tuple should be in the
+        form (min, max, mu, sd).
+    density_truncnorm : Optional[tuple[float, float, float, float]]
+        The radius of the new bodies. Default is None (determined by the
+        mass with some default density assumption).
+    radius_truncnorm : Optional[tuple[float, float, float, float]]
+        The parameters for the truncated normal distribution of the
+        radius of the new bodies. The tuple should be in the form
+        (min, max, mu, sd). Default is None (auto-calculated), which
+        means that the radius will be determined by the mass with
+        the specified density.
+    eccentricity_truncnorm : tuple[float, float, float, float]
+        The parameters for the truncated normal distribution of the
+        eccentricity of the orbit. Default is a degenerate distribution
+        with mu = 0 and sd = 0 (circular orbit).
+    G : float
+        The gravitational constant. Default is `const.SIM_GRAVITY`.
+    """
+    if radius_truncnorm is not None and density_truncnorm is not None:
+        raise ValueError("Either radius_truncnorm or density_truncnorm should be specified, but not both.")
+
+    new_bodies = []
+    for _ in range(num_bodies):
+        min, max, mu, sd = dist_truncnorm
+        a = (min - mu) / sd
+        b = (max - mu) / sd
+        dist = truncnorm.rvs(a, b, loc=mu, scale=sd, size=1)
+        
+        min, max, mu, sd = relative_mass_truncnorm
+        a = (min - mu) / sd
+        b = (max - mu) / sd
+        rel_mass = truncnorm.rvs(a, b, loc=mu, scale=sd, size=1)
+        mass = rel_mass * orbit_around.mass
+        angle = random.uniform(0, 2 * math.pi)
+        pos = vec2(orbit_around.pos.x + dist * math.cos(angle),
+                   orbit_around.pos.y + dist * math.sin(angle))
+        
+        if radius_truncnorm is not None:
+            min, max, mu, sd = radius_truncnorm
+            a = (min - mu) / sd
+            b = (max - mu) / sd
+            radius = truncnorm.rvs(a, b, loc=mu, scale=sd, size=1)
+        elif density_truncnorm is not None:
+            min, max, mu, sd = density_truncnorm
+            a = (min - mu) / sd
+            b = (max - mu) / sd
+            density = truncnorm.rvs(a, b, loc=mu, scale=sd, size=1)
+            radius = (mass / density) ** (1 / 3)
+
+        min, max, mu, sd = eccentricity_truncnorm
+        a = (min - mu) / sd
+        b = (max - mu) / sd
+        eccentricity = truncnorm.rvs(a, b, loc=mu, scale=sd, size=1)
+
+        initial_vel = get_orbital_body_velocity_around(
+            orbit_around=orbit_around,
+            pos=pos,            
+            eccentricity=eccentricity,
+            G=G)
+    
+        new_body = Body(pos, mass, orbit_around.color, radius)
+        new_body.vel = initial_vel
+        new_bodies.append(new_body)
+
+    return new_bodies
+
+def get_orbital_body_velocity_around(
+        orbit_around : Body,
+        initial_pos: vec2,
         eccentricity : float = 0, # default to circular orbit
-        radius=None) -> Body:
+        G: float = const.SIM_GRAVITY) -> vec2:
     """
-    Add a body in (possibly eccentric) orbit around `other_body`.
+    Get the initial velocity of a body in a circular or elliptical orbit around
+    `orbit_around`. The initial position of the body is `initial_pos`.
+
+    Parameters:
+    -----------
+    orbit_around : Body
+        The body around which the new body will orbit.
+    mass : float
+        The mass of the new body.
+    initial_pos : vec2
+        The initial position of the new body.
+    eccentricity : float
+        The eccentricity of the orbit. Default is 0 (circular orbit).
+    G : float
+        The gravitational constant. Default is `const.SIM_GRAVITY`.
+    radius : float
+        The radius of the new body. Default is None (auto-calculated).
+
+    Returns:
+    --------
+    vec2
+        The initial velocity of the new body.
     """
-    angle = math.atan2(pos[1] - other_body.pos[1], pos[0] - other_body.pos[0])
-    dist = (pos - other_body.pos).length()
-    if eccentricity >= 1:
-        eccentricity = 1-1e-6
+    angle = math.atan2(initial_pos[1] - orbit_around.pos[1],
+                       initial_pos[0] - orbit_around.pos[0])
+    dist = (initial_pos - orbit_around.pos).length()
+    eccentricity = max(0, min(eccentricity, 1))
     semi_major_axis = dist / (1 - eccentricity)
-    speed = math.sqrt(const.GRAVITY * other_body.mass * (2 / dist - 1 / semi_major_axis))
-    vx = other_body.vel[0] - speed * math.sin(angle)
-    vy = other_body.vel[1] + speed * math.cos(angle)
-    body = Body(pos=pos, mass=mass, base_color=random.choice(const.COLORS), radius=radius)
-    body.vel = vec2(vx, vy)
-    bodies.add(body)
-    return body
+    speed = math.sqrt(G * orbit_around.mass * (2 / dist - 1 / semi_major_axis))
+    vx = orbit_around.vel[0] - speed * math.cos(angle)
+    vy = orbit_around.vel[1] + speed * math.sin(angle)
+    return vec2(vx, vy)
 
 def weighted_velocity(bodies: BodyList) -> vec2:
     """
@@ -136,60 +173,55 @@ def weighted_velocity(bodies: BodyList) -> vec2:
 def cross(o, a, b):
     return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)    
 
-def convex_hull(points: list[vec2]) -> list[vec2]:
+
+def polygon_area(polygon: list[vec2]) -> float:
     """
-    Calculate the convex hull of a cluster of bodies.
+    Calculate the area of a polygon.
     """
-    points = sorted(points, key=lambda p: (p.x, p.y))
-    if len(points) <= 1:
-        return points
+    area = 0
+    for i in range(len(polygon)):
+        j = (i + 1) % len(polygon)
+        area += polygon[i].x * polygon[j].y
+        area -= polygon[i].y * polygon[j].x
+    return abs(area) / 2
 
-    # Lower hull
-    lower = []
-    for p in points:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
+def random_colorizer_based_on_body_density(body: Body) -> tuple[int, int, int]:
 
-    # Upper hull
-    upper = []
-    for p in reversed(points):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
+    def project(value: float, old_min: float, old_max: float, new_min: float, new_max: float) -> float:
+        return (value - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
+    
+    r = project(math.log(body.mass), 0, 5, 0, 255) if body.mass <= 5 else 255
+    g = project(math.log(body.density), 0, 1, 0, 255) if body.density <= 1 else 255
+    b = project(math.log(body.kinetic_energy + 1), 0, 2, 0, 255) if body.kinetic_energy <= 2 else 255
+    return (r, g, b)
 
-    # Remove the last point of each half because it's repeated at the beginning of the other half
-    return lower[:-1] + upper[:-1]
-
-
-
-def truncated_normal(
-        mu,
-        sigma,
-        lower = -float('inf'),
-        upper = float('inf')):
+def merge_bodies(body1: Body, body2: Body) -> Body:
     """
-    Generate a random number from a truncated normal distribution.
+    Merge two bodies into a single body.
+
+    The new body has the mass, position, and velocity of the center of mass
+    of the two bodies, and the color is a weighted average of the two colors.
 
     Parameters:
     -----------
-    mu : float
-        The mean of the normal distribution.
-    sigma : float
-        The standard deviation of the normal distribution.
-    lower : float
-        The lower bound of the truncation. Default is negative infinity.
-    upper : float
-        The upper bound of the truncation. Default is positive infinity.
+    body1 : Body
+        The first body.
+    body2 : Body
+        The second body.
 
     Returns:
     --------
-    float
-        A random number from the truncated normal distribution.
+    The two bodies merged into a single body.
     """
 
-    while True:
-        x = random.gauss(mu, sigma)
-        if lower <= x <= upper:
-            return x
-        
+    new_mass = body1.mass + body2.mass
+    new_pos = (body1.pos * body1.mass + body2.pos * body2.mass) / new_mass
+    new_color = tuple((a * body1.mass + b * body2.mass) / new_mass for a, b in zip(body1.color, body2.color))
+    new_body = Body(pos=new_pos,
+                    mass=new_mass,
+                    base_color=new_color,
+                    radius=None)
+    new_body.density = (body1.density * body1.mass + body2.density * body2.mass) / new_mass
+    new_body.vel = (body1.vel * body1.mass + body2.vel * body2.mass) / new_mass
+
+    return new_body
